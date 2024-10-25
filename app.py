@@ -1,16 +1,26 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import urllib.parse
 import tkinter as tk
 from tkinter import messagebox
 import platform
 import threading
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Variable global para almacenar el último mensaje enviado
+global_message = "No hay mensajes nuevos."
+
+# Clase para manejar los mensajes en la interfaz gráfica
+class MessageHandler:
+    def enviarrr(self, mensaje):
+        global global_message
+        global_message = mensaje  # Actualizamos el mensaje global
+        print(f"Nuevo mensaje a cliente: {mensaje}")
 
 # Definimos la clase que maneja las solicitudes HTTP
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/':
-            # Contenido HTML minimalista con solo un input y un label
-            content = '''
+            # Contenido HTML que incluye el mensaje actualizado
+            content = f'''
             <!DOCTYPE html>
             <html lang="es">
             <head>
@@ -19,6 +29,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 <title>Formulario</title>
             </head>
             <body>
+                <h1>Mensajes recibidos: {global_message}</h1>
                 <form method="POST" action="/">
                     <label for="input-user">Introduce tu nombre de usuario:</label>
                     <input type="text" id="input-user" name="user" required>
@@ -30,38 +41,50 @@ class RequestHandler(BaseHTTPRequestHandler):
             </html>
             '''
             self.send_response(200)
-            self.send_header('Content-Type', 'text/html')
+            self.send_header('Content-Type', 'text/html; charset=utf-8')  # Aseguramos que el navegador lo interprete como UTF-8
             self.end_headers()
-            self.wfile.write(content.encode('utf-8'))
+            self.wfile.write(content.encode('utf-8'))  # Codificamos siempre en UTF-8 para evitar problemas con caracteres especiales
 
     def do_POST(self):
-        # Leer los datos del formulario
         content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length).decode('utf-8')
+        post_data = self.rfile.read(content_length).decode('utf-8')  # Decodificamos correctamente el contenido como UTF-8
         post_data = urllib.parse.parse_qs(post_data)
 
         user = post_data.get('user', [''])[0]
         info = post_data.get('info', [''])[0]
 
-        # Imprimir los datos en la consola
         print(f'Se ha conectado un compañero con la IP: {self.client_address[0]}')
 
-        # Mostrar el mensaje en una ventana de tkinter
+        # Ejecutamos el proceso de mostrar mensaje en un hilo separado
         threading.Thread(target=self.show_message, args=(user, info)).start()
 
-        # Responder con un mensaje de confirmación
-        response = '''
-        <html>
-        <h1>Datos recibidos correctamente</h1>
-        </html>
+        # Respuesta al cliente
+        response = f'''
+        <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Formulario</title>
+            </head>
+            <body>
+                <h1>Mensajes recibidos: {global_message}</h1>
+                <form method="POST" action="/">
+                    <label for="input-user">Introduce tu nombre de usuario:</label>
+                    <input type="text" id="input-user" name="user" required>
+                    <label for="input-info">Introduce tu información:</label>
+                    <input type="text" id="input-info" name="info" required>
+                    <button type="submit">Enviar</button>
+                </form>
+            </body>
+            </html>
         '''
         self.send_response(200)
-        self.send_header('Content-Type', 'text/html')
+        self.send_header('Content-Type', 'text/html; charset=utf-8')  # Encabezado para UTF-8
         self.end_headers()
-        self.wfile.write(response.encode('utf-8'))
+        self.wfile.write(response.encode('utf-8'))  # Enviamos respuesta codificada en UTF-8
 
     def show_message(self, user, info):
-        # Crear una ventana para mostrar el mensaje
         messagebox.showinfo('Mensaje de compañero', f'Mensaje de {user}: {info}')
 
 # Función para iniciar el servidor en un hilo separado
@@ -79,7 +102,6 @@ def create_gui():
     root.title('Servidor')
 
     def start_server():
-        # Iniciar el servidor en un hilo separado
         server_thread = threading.Thread(target=run)
         server_thread.start()
 
@@ -87,6 +109,7 @@ def create_gui():
         root2 = tk.Tk()
         root2.configure(bg='yellow')
         root2.geometry('660x550')
+        root2.title('Información Hardware')
         label = tk.Label(root2, text=f'Sistema operativo: {platform.system()}', wraplength=400)
         label2 = tk.Label(root2, text=f'Arquitectura: {platform.machine()}', wraplength=400)
         label3 = tk.Label(root2, text=f'CPU: {platform.processor()}', wraplength=200)
@@ -95,12 +118,27 @@ def create_gui():
         label3.grid(row=2, column=0, padx=10, pady=10)
         root2.mainloop()
 
-    # Botones para la interfaz
-    botón = tk.Button(root, text='Hardware', height='2', width='10', command=hardware_info)
-    botón.grid(row=0, column=0, padx=10, pady=10)
+    def enviar_mensaje_a_cliente():
+        root3 = tk.Tk()
+        root3.configure(bg='yellow')
+        root3.geometry('660x550')
+        root3.title('Enviar mensaje a cliente')
 
-    botón2 = tk.Button(root, text='Iniciar servidor', height='2', width='25', command=start_server)
-    botón2.grid(row=2, column=0, padx=10, pady=10)
+        message_handler = MessageHandler()
+
+        texto = tk.Text(root3, height='2', width='25')
+        texto.grid(row=0, column=0, padx=10, pady=10)
+
+        def enviar_mensaje():
+            mensaje = texto.get('1.0', 'end-1c')
+            message_handler.enviarrr(mensaje)  # Llamar al método enviarrr de MessageHandler
+
+        tk.Button(root3, text='Enviar mensaje', height='2', width='25', command=enviar_mensaje).grid(row=1, padx=10, pady=10)
+
+    # Botones para la interfaz
+    tk.Button(root, text='Hardware', height='2', width='10', command=hardware_info).grid(row=0, column=0, padx=10, pady=10)
+    tk.Button(root, text='Iniciar servidor', height='2', width='25', command=start_server).grid(row=2, column=0, padx=10, pady=10)
+    tk.Button(root, text='Enviar mensaje', height='2', width='25', command=enviar_mensaje_a_cliente).grid(row=3, column=0, padx=10, pady=10)
 
     root.mainloop()
 
